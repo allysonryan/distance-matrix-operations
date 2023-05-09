@@ -2,6 +2,7 @@
 from __future__ import division, print_function
 import os
 import numpy as np
+import networkx as nx
 
 from itertools import combinations
 from pyclesperanto_prototype import rotate
@@ -102,3 +103,81 @@ def create_synthetic_dataset(empty_image, n_nuclei):
                 empty_image[d0_l:d0_h, d1_l:d1_h, d2_l:d2_h] = empty_image[d0_l:d0_h, d1_l:d1_h, d2_l:d2_h] + np.ascontiguousarray(nucleus.astype(int))
     
     return empty_image
+
+###-------------------------------------------------------------------------------------------------
+
+def generate_complete_distance_network(n_objects, index_pairs, minimum_distances):
+    
+    '''index pairs should be a 2d array'''
+    
+    graph = nx.Graph()
+    
+    nodes = np.arange(n_objects)
+    graph.add_nodes_from(nodes)
+    
+    
+    reshaped_minimum_distances = np.reshape(minimum_distances, (minimum_distances.shape[0], 1))
+    weighted_edges = np.concatenate((index_pairs, reshaped_minimum_distances), axis = 1)
+    graph.add_weighted_edges_from([(weighted_edges[i,:]) for i in range(weighted_edges.shape[0])])
+    
+    graph.remove_edges_from(nx.selfloop_edges(graph))
+    
+    return graph
+
+###-------------------------------------------------------------------------------------------------
+
+def prune_distance_network_by_threshold(graph, threshold):
+    
+    '''remove all edges larger than threshold'''
+    
+    pruned_graph = graph.copy()
+    
+    for edge in graph.edges(data=True):
+        for key, value in edge[2].items():
+            if key == 'weight':
+                if value > threshold:
+                    pruned_graph.remove_edge(edge[0], edge[1])
+            else:
+                continue
+    
+    return pruned_graph
+
+###-------------------------------------------------------------------------------------------------
+
+def list_network_connected_component_nodes(graph):
+    
+    '''list nodes of each connected component in a network'''
+    
+    connected_components_sets = list(nx.connected_components(graph))
+    connected_components_lists = [0] * len(connected_components_sets)
+    
+    counter = 0
+    for i in connected_components_sets:
+        connected_components_lists[counter] = sorted(list(map(int, i)))
+        counter += 1
+    
+    return connected_components_lists
+
+###-------------------------------------------------------------------------------------------------
+
+def find_network_giant_component(connected_components, connected_components_sizes, network_mean_degree):
+    
+    qualification_value = network_mean_degree**2 - 2*network_mean_degree
+    
+    if qualification_value > 0:
+        giant_component = connected_components[np.argmax(connected_components_sizes)]
+    else:
+        giant_component = []
+    
+    return giant_component
+
+###-------------------------------------------------------------------------------------------------
+
+def calculate_network_density(graph):
+    
+    n_edges = len(graph.edges())
+    n_nodes = len(graph.nodes())
+    
+    density = (2 * n_edges) / (n_nodes * (n_nodes - 1))
+    
+    return density
